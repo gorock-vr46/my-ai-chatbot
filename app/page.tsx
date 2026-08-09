@@ -1,24 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Message = {
   role: "user" | "assistant";
   content: string;
 };
 
+const STORAGE_KEY = "my-ai-chat-history";
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // Load previous chat when the page opens
+  useEffect(() => {
+    try {
+      const savedChat = localStorage.getItem(STORAGE_KEY);
+
+      if (savedChat) {
+        setMessages(JSON.parse(savedChat));
+      }
+    } catch (error) {
+      console.error("Could not load chat history:", error);
+    }
+
+    setLoaded(true);
+  }, []);
+
+  // Save chat whenever messages change
+  useEffect(() => {
+    if (!loaded) return;
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(messages)
+      );
+    } catch (error) {
+      console.error("Could not save chat history:", error);
+    }
+  }, [messages, loaded]);
 
   async function sendMessage() {
-    if (!input.trim() || loading) return;
-
     const userMessage = input.trim();
 
-    setMessages((oldMessages) => [
-      ...oldMessages,
+    if (!userMessage || loading) return;
+
+    setMessages((previous) => [
+      ...previous,
       {
         role: "user",
         content: userMessage,
@@ -42,32 +74,46 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error);
+        throw new Error(
+          data.error || "Something went wrong"
+        );
       }
 
-      setMessages((oldMessages) => [
-        ...oldMessages,
+      setMessages((previous) => [
+        ...previous,
         {
           role: "assistant",
           content: data.response,
         },
       ]);
     } catch (error) {
-      setMessages((oldMessages) => [
-        ...oldMessages,
-        {
-          role: "assistant",
-          content:
-            "Sorry, something went wrong. Please try again.",
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+      const errorMessage =
+       error instanceof Error
+          ? error.message
+          : "";
+
+  let userMessage =
+    "Sorry, something went wrong. Please try again.";
+
+  if (
+    errorMessage.includes("429") ||
+    errorMessage.includes("RESOURCE_EXHAUSTED") ||
+    errorMessage.includes("quota")
+  ) {
+    userMessage =
+      "⚠️ Gemini's free quota has been reached. Please try again later.";
   }
 
-  function clearChat() {
-    setMessages([]);
+  setMessages((previous) => [
+    ...previous,
+    {
+      role: "assistant",
+      content: userMessage,
+    },
+  ]);
+} finally {
+  setLoading(false);
+}
   }
 
   function handleKeyDown(
@@ -79,42 +125,51 @@ export default function Home() {
     }
   }
 
+  function clearChat() {
+    setMessages([]);
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black text-white">
       <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-6">
 
+        {/* Header */}
         <header className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">
-              🤖 My AI Chatbot
+            <h1 className="text-2xl font-bold">
+              🤖 My AI Assistant
             </h1>
 
-            <p className="mt-1 text-slate-400">
-              Your personal AI assistant
+            <p className="text-sm text-slate-400">
+              Powered by Gemini
             </p>
           </div>
 
           <button
             onClick={clearChat}
-            className="rounded-lg border border-slate-700 px-4 py-2 hover:bg-slate-800"
+            className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
           >
-            Clear
+            Clear Chat
           </button>
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-4">
+        {/* Chat */}
+        <section className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-2xl">
 
           {messages.length === 0 && (
             <div className="flex min-h-[500px] items-center justify-center text-center">
               <div>
-                <div className="text-6xl">🤖</div>
+                <div className="mb-4 text-6xl">
+                  🤖
+                </div>
 
-                <h2 className="mt-4 text-2xl font-semibold">
+                <h2 className="text-2xl font-semibold">
                   Hello! 👋
                 </h2>
 
-                <p className="mt-2 text-slate-400">
-                  Ask me anything.
+                <p className="mt-2 max-w-md text-slate-400">
+                  Ask me anything and I'll try to help.
                 </p>
               </div>
             </div>
@@ -130,10 +185,10 @@ export default function Home() {
               }`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                   message.role === "user"
-                    ? "bg-blue-600"
-                    : "bg-slate-800"
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-800 text-slate-100"
                 }`}
               >
                 <p className="whitespace-pre-wrap">
@@ -146,13 +201,18 @@ export default function Home() {
           {loading && (
             <div className="flex justify-start">
               <div className="rounded-2xl bg-slate-800 px-4 py-3 text-slate-400">
-                AI is thinking...
+                <span className="animate-pulse">
+                  AI is thinking...
+                </span>
               </div>
             </div>
           )}
-        </div>
 
+        </section>
+
+        {/* Input */}
         <div className="mt-4">
+
           <div className="flex gap-2 rounded-2xl border border-slate-700 bg-slate-900 p-2">
 
             <textarea
@@ -162,14 +222,15 @@ export default function Home() {
               }
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything..."
-              className="flex-1 resize-none bg-transparent px-3 py-3 outline-none"
               rows={1}
+              disabled={loading}
+              className="flex-1 resize-none bg-transparent px-3 py-3 text-white outline-none placeholder:text-slate-500"
             />
 
             <button
               onClick={sendMessage}
               disabled={loading || !input.trim()}
-              className="rounded-xl bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-500 disabled:opacity-50"
+              className="rounded-xl bg-blue-600 px-5 py-3 font-medium hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "..." : "Send"}
             </button>
@@ -177,8 +238,9 @@ export default function Home() {
           </div>
 
           <p className="mt-2 text-center text-xs text-slate-500">
-            Press Enter to send
+            Press Enter to send • Shift + Enter for a new line
           </p>
+
         </div>
 
       </div>
