@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Message = {
   role: "user" | "assistant";
@@ -54,14 +56,12 @@ export default function Home() {
     };
 
     const animateCursor = () => {
-      // Fast cursor movement
       animatedX.current +=
         (cursorX.current - animatedX.current) * 0.25;
 
       animatedY.current +=
         (cursorY.current - animatedY.current) * 0.25;
 
-      // Main cursor dot
       if (cursorDotRef.current) {
         cursorDotRef.current.style.transform = `translate3d(
           ${cursorX.current}px,
@@ -70,7 +70,6 @@ export default function Home() {
         ) translate(-50%, -50%)`;
       }
 
-      // Main glow
       if (cursorGlowRef.current) {
         cursorGlowRef.current.style.transform = `translate3d(
           ${animatedX.current}px,
@@ -79,7 +78,6 @@ export default function Home() {
         ) translate(-50%, -50%)`;
       }
 
-      // Slower trail
       if (cursorTrailRef.current) {
         const trailX =
           animatedX.current +
@@ -238,7 +236,6 @@ export default function Home() {
       {/* CUSTOM CURSOR                                      */}
       {/* ================================================== */}
 
-      {/* Large slow purple trail */}
       <div
         ref={cursorTrailRef}
         className="pointer-events-none fixed left-0 top-0 z-[9999] hidden h-28 w-28 rounded-full bg-violet-500/10 blur-3xl md:block"
@@ -247,7 +244,6 @@ export default function Home() {
         }}
       />
 
-      {/* Medium blue glow */}
       <div
         ref={cursorGlowRef}
         className="pointer-events-none fixed left-0 top-0 z-[9999] hidden h-44 w-44 rounded-full bg-blue-500/10 blur-3xl md:block"
@@ -256,7 +252,6 @@ export default function Home() {
         }}
       />
 
-      {/* Small cursor core */}
       <div
         ref={cursorDotRef}
         className="pointer-events-none fixed left-0 top-0 z-[10000] hidden h-2.5 w-2.5 rounded-full bg-blue-300 shadow-[0_0_18px_6px_rgba(59,130,246,0.45)] md:block"
@@ -291,7 +286,6 @@ export default function Home() {
 
           <div className="flex items-center gap-3">
 
-            {/* Logo */}
             <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-xl shadow-lg shadow-blue-500/20">
               <div className="absolute inset-0 rounded-2xl bg-blue-400/20 blur-md" />
 
@@ -324,7 +318,6 @@ export default function Home() {
 
           </div>
 
-          {/* Clear Chat */}
           <button
             onClick={clearChat}
             disabled={messages.length === 0}
@@ -360,15 +353,10 @@ export default function Home() {
 
           {messages.length === 0 ? (
 
-            /* ================================================== */
-            /* WELCOME SCREEN                                     */
-            /* ================================================== */
-
             <div className="flex min-h-[65vh] items-center justify-center px-2">
 
               <div className="w-full max-w-2xl text-center">
 
-                {/* AI Icon */}
                 <div className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center">
 
                   <div className="absolute inset-0 animate-pulse rounded-3xl bg-blue-500/20 blur-xl" />
@@ -384,11 +372,13 @@ export default function Home() {
                 </p>
 
                 <h2 className="text-3xl font-bold tracking-tight sm:text-5xl">
+
                   How can I help you
 
                   <span className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
                     {" "}today?
                   </span>
+
                 </h2>
 
                 <p className="mx-auto mt-4 max-w-lg text-sm leading-6 text-slate-400 sm:text-base">
@@ -396,7 +386,6 @@ export default function Home() {
                   write content, or get help with your projects.
                 </p>
 
-                {/* Suggested Prompts */}
                 <div className="mt-8 grid gap-3 sm:grid-cols-2">
 
                   {suggestions.map((suggestion) => (
@@ -426,10 +415,6 @@ export default function Home() {
             </div>
 
           ) : (
-
-            /* ================================================== */
-            /* MESSAGES                                           */
-            /* ================================================== */
 
             <div className="mx-auto max-w-4xl space-y-6 py-6">
 
@@ -461,7 +446,10 @@ export default function Home() {
                     }`}
                   >
 
-                    {/* Message */}
+                    {/* ================================================== */}
+                    {/* FORMATTED MESSAGE                                  */}
+                    {/* ================================================== */}
+
                     <div
                       className={`rounded-2xl px-4 py-3.5 text-sm leading-7 shadow-lg transition-all duration-200 ${
                         message.role === "user"
@@ -470,9 +458,188 @@ export default function Home() {
                       }`}
                     >
 
-                      <p className="whitespace-pre-wrap break-words">
-                        {message.content}
-                      </p>
+                      {message.role === "assistant" ? (
+
+                        <div className="ai-response">
+
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              h1: ({ children }) => (
+                                <h1 className="mb-4 mt-2 text-2xl font-bold tracking-tight text-white">
+                                  {children}
+                                </h1>
+                              ),
+
+                              h2: ({ children }) => (
+                                <h2 className="mb-3 mt-5 text-xl font-bold tracking-tight text-white">
+                                  {children}
+                                </h2>
+                              ),
+
+                              h3: ({ children }) => (
+                                <h3 className="mb-2 mt-4 text-lg font-semibold text-blue-300">
+                                  {children}
+                                </h3>
+                              ),
+
+                              h4: ({ children }) => (
+                                <h4 className="mb-2 mt-3 text-base font-semibold text-slate-200">
+                                  {children}
+                                </h4>
+                              ),
+
+                              p: ({ children }) => (
+                                <p className="mb-4 last:mb-0 leading-7 text-slate-200">
+                                  {children}
+                                </p>
+                              ),
+
+                              strong: ({ children }) => (
+                                <strong className="font-semibold text-white">
+                                  {children}
+                                </strong>
+                              ),
+
+                              em: ({ children }) => (
+                                <em className="text-slate-300">
+                                  {children}
+                                </em>
+                              ),
+
+                              ul: ({ children }) => (
+                                <ul className="mb-4 ml-5 list-disc space-y-2 text-slate-200 marker:text-blue-400">
+                                  {children}
+                                </ul>
+                              ),
+
+                              ol: ({ children }) => (
+                                <ol className="mb-4 ml-5 list-decimal space-y-2 text-slate-200 marker:font-semibold marker:text-blue-400">
+                                  {children}
+                                </ol>
+                              ),
+
+                              li: ({ children }) => (
+                                <li className="pl-1 leading-7">
+                                  {children}
+                                </li>
+                              ),
+
+                              blockquote: ({ children }) => (
+                                <blockquote className="my-4 border-l-4 border-blue-500/60 bg-blue-500/[0.05] px-4 py-3 italic text-slate-300">
+                                  {children}
+                                </blockquote>
+                              ),
+
+                              hr: () => (
+                                <hr className="my-5 border-white/10" />
+                              ),
+
+                              a: ({ children, href }) => (
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-medium text-blue-400 underline decoration-blue-400/30 underline-offset-4 transition hover:text-blue-300"
+                                >
+                                  {children}
+                                </a>
+                              ),
+
+                              code: ({
+                                children,
+                                className,
+                              }) => {
+                                const isBlock =
+                                  className?.includes(
+                                    "language-"
+                                  );
+
+                                if (isBlock) {
+                                  return (
+                                    <code
+                                      className={`${className ?? ""} block whitespace-pre-wrap break-words text-sm leading-6 text-slate-200`}
+                                    >
+                                      {children}
+                                    </code>
+                                  );
+                                }
+
+                                return (
+                                  <code className="rounded-md border border-white/10 bg-black/30 px-1.5 py-0.5 font-mono text-[0.9em] text-blue-300">
+                                    {children}
+                                  </code>
+                                );
+                              },
+
+                              pre: ({ children }) => (
+                                <div className="my-4 overflow-hidden rounded-xl border border-white/10 bg-[#050810] shadow-lg">
+                                  <div className="flex items-center gap-1.5 border-b border-white/10 bg-white/[0.03] px-4 py-2">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
+                                    <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
+                                    <span className="ml-2 text-[10px] text-slate-500">
+                                      CODE
+                                    </span>
+                                  </div>
+
+                                  <pre className="overflow-x-auto p-4 text-sm leading-6">
+                                    {children}
+                                  </pre>
+                                </div>
+                              ),
+
+                              table: ({ children }) => (
+                                <div className="my-4 overflow-x-auto rounded-xl border border-white/10">
+                                  <table className="w-full border-collapse text-left text-sm">
+                                    {children}
+                                  </table>
+                                </div>
+                              ),
+
+                              thead: ({ children }) => (
+                                <thead className="bg-white/[0.06] text-white">
+                                  {children}
+                                </thead>
+                              ),
+
+                              tbody: ({ children }) => (
+                                <tbody className="divide-y divide-white/10">
+                                  {children}
+                                </tbody>
+                              ),
+
+                              tr: ({ children }) => (
+                                <tr className="transition hover:bg-white/[0.03]">
+                                  {children}
+                                </tr>
+                              ),
+
+                              th: ({ children }) => (
+                                <th className="border-r border-white/10 px-4 py-3 font-semibold last:border-r-0">
+                                  {children}
+                                </th>
+                              ),
+
+                              td: ({ children }) => (
+                                <td className="border-r border-white/10 px-4 py-3 text-slate-300 last:border-r-0">
+                                  {children}
+                                </td>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+
+                        </div>
+
+                      ) : (
+
+                        <p className="whitespace-pre-wrap break-words leading-7">
+                          {message.content}
+                        </p>
+
+                      )}
 
                     </div>
 
@@ -514,10 +681,7 @@ export default function Home() {
 
               ))}
 
-              {/* ================================================== */}
-              {/* LOADING ANIMATION                                  */}
-              {/* ================================================== */}
-
+              {/* Loading */}
               {loading && (
 
                 <div className="flex items-start gap-3">
@@ -570,7 +734,6 @@ export default function Home() {
               className="min-h-[52px] w-full resize-none bg-transparent px-4 py-3 pr-14 text-sm text-white outline-none placeholder:text-slate-600 disabled:opacity-50"
             />
 
-            {/* Send Button */}
             <button
               onClick={() => sendMessage()}
               disabled={loading || !input.trim()}
