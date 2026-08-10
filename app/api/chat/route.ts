@@ -4,7 +4,7 @@ export async function POST(request: Request) {
   try {
     const { message } = await request.json();
 
-    if (!message) {
+    if (!message || typeof message !== "string") {
       return Response.json(
         { error: "No message received" },
         { status: 400 }
@@ -15,19 +15,23 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
       return Response.json(
-        { error: "GEMINI_API_KEY is not configured" },
+        {
+          error:
+            "GEMINI_API_KEY is not configured. Please add it to your environment variables.",
+        },
         { status: 500 }
       );
     }
 
-    // =====================================================
-    // CURRENT DATE AND TIME - INDIA
-    // =====================================================
+    // =========================================================
+    // CURRENT DATE & TIME - INDIA
+    // =========================================================
 
+    const timeZone = "Asia/Kolkata";
     const now = new Date();
 
     const dateFormatter = new Intl.DateTimeFormat("en-IN", {
-      timeZone: "Asia/Kolkata",
+      timeZone,
       weekday: "long",
       day: "numeric",
       month: "long",
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
     });
 
     const timeFormatter = new Intl.DateTimeFormat("en-IN", {
-      timeZone: "Asia/Kolkata",
+      timeZone,
       hour: "numeric",
       minute: "2-digit",
       second: "2-digit",
@@ -45,63 +49,128 @@ export async function POST(request: Request) {
     const currentDate = dateFormatter.format(now);
     const currentTime = timeFormatter.format(now);
 
-    // =====================================================
-    // DATE/TIME QUESTIONS
-    // =====================================================
+    // =========================================================
+    // NORMALIZE USER MESSAGE
+    // =========================================================
 
-    const text = message.toLowerCase().trim();
+    const normalizedMessage = message
+      .toLowerCase()
+      .trim()
+      .replace(/[?!.,]/g, "");
 
-    if (
-      text.includes("today's date") ||
-      text.includes("todays date") ||
-      text.includes("what date is it today") ||
-      text.includes("what day is today") ||
-      text === "today"
-    ) {
+    // =========================================================
+    // TODAY / CURRENT DATE
+    // =========================================================
+
+    const asksForToday =
+      normalizedMessage === "today" ||
+      normalizedMessage.includes("today's date") ||
+      normalizedMessage.includes("todays date") ||
+      normalizedMessage.includes("what is today's date") ||
+      normalizedMessage.includes("what is todays date") ||
+      normalizedMessage.includes("what date is it today") ||
+      normalizedMessage.includes("what day is today") ||
+      normalizedMessage.includes("what day is it today") ||
+      normalizedMessage === "current date" ||
+      normalizedMessage.includes("date today");
+
+    if (asksForToday) {
       return Response.json({
-        response: `Today is **${currentDate}**.`,
+        response: `## Today's Date\n\nToday is **${currentDate}**.`,
       });
     }
 
-    if (
-      text.includes("current time") ||
-      text.includes("what time is it") ||
-      text.includes("time now")
-    ) {
+    // =========================================================
+    // CURRENT TIME
+    // =========================================================
+
+    const asksForTime =
+      normalizedMessage === "time" ||
+      normalizedMessage === "time now" ||
+      normalizedMessage.includes("current time") ||
+      normalizedMessage.includes("what time is it") ||
+      normalizedMessage.includes("what is the current time") ||
+      normalizedMessage.includes("what time is it now");
+
+    if (asksForTime) {
       return Response.json({
-        response: `The current time in India is **${currentTime}**.`,
+        response: `## Current Time\n\nThe current time in India is **${currentTime}**.`,
       });
     }
 
-    // =====================================================
-    // GEMINI
-    // =====================================================
+    // =========================================================
+    // TOMORROW
+    // =========================================================
+
+    const asksForTomorrow =
+      normalizedMessage.includes("tomorrow's date") ||
+      normalizedMessage.includes("tomorrows date") ||
+      normalizedMessage.includes("what date is tomorrow") ||
+      normalizedMessage === "tomorrow" ||
+      normalizedMessage.includes("date tomorrow");
+
+    if (asksForTomorrow) {
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const tomorrowDate = dateFormatter.format(tomorrow);
+
+      return Response.json({
+        response: `## Tomorrow\n\nTomorrow is **${tomorrowDate}**.`,
+      });
+    }
+
+    // =========================================================
+    // YESTERDAY
+    // =========================================================
+
+    const asksForYesterday =
+      normalizedMessage.includes("yesterday's date") ||
+      normalizedMessage.includes("yesterdays date") ||
+      normalizedMessage.includes("what date was yesterday") ||
+      normalizedMessage === "yesterday" ||
+      normalizedMessage.includes("date yesterday");
+
+    if (asksForYesterday) {
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const yesterdayDate = dateFormatter.format(yesterday);
+
+      return Response.json({
+        response: `## Yesterday\n\nYesterday was **${yesterdayDate}**.`,
+      });
+    }
+
+    // =========================================================
+    // GEMINI AI
+    // =========================================================
 
     const ai = new GoogleGenAI({
-      apiKey: apiKey,
+      apiKey,
     });
 
     const prompt = `
 You are My AI Assistant.
 
-Current date in India:
-${currentDate}
+CURRENT DATE AND TIME:
+Current date in India: ${currentDate}
+Current time in India: ${currentTime}
+Timezone: Asia/Kolkata (IST)
 
-Current time in India:
-${currentTime}
+IMPORTANT:
+- Use the current date and time above for date-related questions.
+- Do not assume the current year from your training data.
+- Do not say the current date is 2024 or another outdated date.
+- Answer naturally and accurately.
+- For longer answers, use Markdown formatting.
+- Use headings when appropriate.
+- Use bullet points for lists.
+- Use numbered lists for steps.
+- Use bold text for important information.
+- Use code blocks when showing programming code.
 
-Timezone: Asia/Kolkata.
-
-Answer the user's question clearly and helpfully.
-
-Use Markdown formatting when useful:
-- Headings
-- Bullet points
-- Numbered lists
-- Bold text
-- Code blocks
-
-User question:
+USER MESSAGE:
 ${message}
 `;
 
@@ -111,18 +180,66 @@ ${message}
     });
 
     return Response.json({
-      response: response.text,
+      response:
+        response.text ||
+        "Sorry, I couldn't generate a response. Please try again.",
     });
-
   } catch (error) {
     console.error("Gemini API error:", error);
+
+    // =========================================================
+    // GEMINI RATE LIMIT / QUOTA ERROR
+    // =========================================================
+
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    const lowerError = errorMessage.toLowerCase();
+
+    if (
+      lowerError.includes("429") ||
+      lowerError.includes("too many requests") ||
+      lowerError.includes("resource_exhausted") ||
+      lowerError.includes("quota") ||
+      lowerError.includes("rate limit")
+    ) {
+      return Response.json(
+        {
+          error:
+            "⚠️ Gemini API limit reached. The free API quota or request limit has been reached. Please wait and try again later.",
+        },
+        { status: 429 }
+      );
+    }
+
+    // =========================================================
+    // API KEY ERROR
+    // =========================================================
+
+    if (
+      lowerError.includes("api key") ||
+      lowerError.includes("permission denied") ||
+      lowerError.includes("unauthorized")
+    ) {
+      return Response.json(
+        {
+          error:
+            "🔑 Gemini API authentication failed. Please check your GEMINI_API_KEY.",
+        },
+        { status: 401 }
+      );
+    }
+
+    // =========================================================
+    // OTHER GEMINI ERRORS
+    // =========================================================
 
     return Response.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Failed to get Gemini response",
+          "Sorry, Gemini could not process your request right now. Please try again later.",
       },
       { status: 500 }
     );
