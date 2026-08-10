@@ -20,16 +20,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // =========================================================
-    // CURRENT DATE & TIME - INDIA
-    // =========================================================
-
+    // India Standard Time
     const timeZone = "Asia/Kolkata";
 
     const now = new Date();
 
     const dateFormatter = new Intl.DateTimeFormat("en-IN", {
-      timeZone,
+      timeZone: timeZone,
       weekday: "long",
       day: "numeric",
       month: "long",
@@ -37,7 +34,7 @@ export async function POST(request: Request) {
     });
 
     const timeFormatter = new Intl.DateTimeFormat("en-IN", {
-      timeZone,
+      timeZone: timeZone,
       hour: "numeric",
       minute: "2-digit",
       second: "2-digit",
@@ -47,153 +44,128 @@ export async function POST(request: Request) {
     const currentDate = dateFormatter.format(now);
     const currentTime = timeFormatter.format(now);
 
-    // =========================================================
-    // NORMALIZE USER MESSAGE
-    // =========================================================
-
+    // Normalize the user's question
     const normalizedMessage = message
       .toLowerCase()
       .trim()
       .replace(/[?!.,]/g, "");
 
-    // =========================================================
-    // DATE / TIME QUESTIONS
-    // Handle these directly instead of asking Gemini.
-    // =========================================================
+    // =====================================================
+    // DATE QUESTIONS
+    // =====================================================
 
-    const dateQuestions = [
-      "what is today's date",
-      "what is todays date",
-      "what date is it today",
-      "what day is today",
-      "what day is it today",
-      "today's date",
-      "todays date",
-      "today date",
-      "current date",
-      "date today",
-      "today",
-    ];
+    const asksForToday =
+      normalizedMessage.includes("today's date") ||
+      normalizedMessage.includes("todays date") ||
+      normalizedMessage.includes("what is today's date") ||
+      normalizedMessage.includes("what is todays date") ||
+      normalizedMessage.includes("what date is it today") ||
+      normalizedMessage.includes("what day is today") ||
+      normalizedMessage.includes("what day is it today") ||
+      normalizedMessage === "today";
 
-    const timeQuestions = [
-      "what time is it",
-      "what is the current time",
-      "what time is it now",
-      "current time",
-      "time now",
-      "what is the time",
-    ];
-
-    const tomorrowQuestions = [
-      "what is tomorrow's date",
-      "what is tomorrows date",
-      "what date is tomorrow",
-      "tomorrow date",
-      "date tomorrow",
-    ];
-
-    const yesterdayQuestions = [
-      "what was yesterday's date",
-      "what was yesterdays date",
-      "what date was yesterday",
-      "yesterday date",
-      "date yesterday",
-    ];
-
-    // Check for current date
-    if (dateQuestions.includes(normalizedMessage)) {
+    if (asksForToday) {
       return Response.json({
-        response: `Today is ${currentDate}.`,
+        response: `Today is **${currentDate}**.`,
       });
     }
 
-    // Check for current time
-    if (timeQuestions.includes(normalizedMessage)) {
+    // =====================================================
+    // CURRENT TIME
+    // =====================================================
+
+    const asksForTime =
+      normalizedMessage.includes("current time") ||
+      normalizedMessage.includes("what time is it") ||
+      normalizedMessage.includes("what is the current time") ||
+      normalizedMessage.includes("what time is it now") ||
+      normalizedMessage.includes("time now");
+
+    if (asksForTime) {
       return Response.json({
-        response: `The current time in India is ${currentTime}.`,
+        response: `The current time in India is **${currentTime}**.`,
       });
     }
 
-    // =========================================================
+    // =====================================================
     // TOMORROW
-    // =========================================================
+    // =====================================================
 
-    if (tomorrowQuestions.includes(normalizedMessage)) {
+    const asksForTomorrow =
+      normalizedMessage.includes("tomorrow's date") ||
+      normalizedMessage.includes("tomorrows date") ||
+      normalizedMessage.includes("what date is tomorrow") ||
+      normalizedMessage.includes("date tomorrow");
+
+    if (asksForTomorrow) {
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       const tomorrowDate = dateFormatter.format(tomorrow);
 
       return Response.json({
-        response: `Tomorrow is ${tomorrowDate}.`,
+        response: `Tomorrow is **${tomorrowDate}**.`,
       });
     }
 
-    // =========================================================
+    // =====================================================
     // YESTERDAY
-    // =========================================================
+    // =====================================================
 
-    if (yesterdayQuestions.includes(normalizedMessage)) {
+    const asksForYesterday =
+      normalizedMessage.includes("yesterday's date") ||
+      normalizedMessage.includes("yesterdays date") ||
+      normalizedMessage.includes("what date was yesterday") ||
+      normalizedMessage.includes("date yesterday");
+
+    if (asksForYesterday) {
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
 
       const yesterdayDate = dateFormatter.format(yesterday);
 
       return Response.json({
-        response: `Yesterday was ${yesterdayDate}.`,
+        response: `Yesterday was **${yesterdayDate}**.`,
       });
     }
 
-    // =========================================================
-    // GEMINI AI
-    // =========================================================
+    // =====================================================
+    // GEMINI
+    // =====================================================
 
     const ai = new GoogleGenAI({
-      apiKey,
+      apiKey: apiKey,
     });
 
-    const systemInstruction = `
+    const prompt = `
 You are My AI Assistant.
 
-Current date:
+The current date in India is:
 ${currentDate}
 
-Current time in India:
+The current time in India is:
 ${currentTime}
 
-Timezone:
-Asia/Kolkata (Indian Standard Time)
+Timezone: Asia/Kolkata (IST)
 
-Important instructions:
+Use the date and time above when answering date-related questions.
 
-- The current date above is authoritative.
-- The current time above is authoritative.
-- If the user asks a date-related question, use the supplied current date.
-- If the user asks about today's date, do not guess from your training data.
-- If the user asks about the current time, use the supplied current time.
-- Do not claim that the current year is 2024 or any previous year unless the supplied date actually says so.
-- For normal questions, answer naturally and helpfully.
-- Format your answers using Markdown when appropriate.
-- Use headings for longer explanations.
-- Use bullet points or numbered lists when useful.
-- Use code blocks when showing programming code.
+User's message:
+${message}
+
+Answer the user's question clearly and helpfully.
+
+For longer answers, use Markdown formatting:
+- Use headings when appropriate.
+- Use bullet points for lists.
+- Use numbered lists for steps.
+- Use bold text for important information.
+- Use code blocks for programming code.
 `;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: `${systemInstruction}
-
-User's message:
-${message}`,
-            },
-          ],
-        },
-      ],
+      contents: prompt,
     });
 
     return Response.json({
@@ -204,7 +176,10 @@ ${message}`,
 
     return Response.json(
       {
-        error: "Failed to get response from Gemini",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get response from Gemini",
       },
       { status: 500 }
     );
