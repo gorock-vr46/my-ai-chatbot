@@ -18,20 +18,26 @@ export default function Home() {
   const [loaded, setLoaded] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  // Cursor position
+  // ==================================================
+  // CURSOR POSITION
+  // ==================================================
+
   const cursorX = useRef(0);
   const cursorY = useRef(0);
 
-  // Animated cursor positions
-  const cursorDotRef = useRef<HTMLDivElement>(null);
-  const cursorGlowRef = useRef<HTMLDivElement>(null);
-  const cursorTrailRef = useRef<HTMLDivElement>(null);
+  // Animated cursor elements
+  const cursorDotRef = useRef<HTMLDivElement | null>(null);
+  const cursorGlowRef = useRef<HTMLDivElement | null>(null);
+  const cursorTrailRef = useRef<HTMLDivElement | null>(null);
 
   // Animation values
   const animatedX = useRef(0);
   const animatedY = useRef(0);
 
-  // Load previous chat
+  // ==================================================
+  // LOAD PREVIOUS CHAT
+  // ==================================================
+
   useEffect(() => {
     try {
       const savedChat = localStorage.getItem(STORAGE_KEY);
@@ -46,7 +52,10 @@ export default function Home() {
     setLoaded(true);
   }, []);
 
-  // Smooth cursor animation
+  // ==================================================
+  // SMOOTH CURSOR ANIMATION
+  // ==================================================
+
   useEffect(() => {
     let animationFrame: number;
 
@@ -102,12 +111,19 @@ export default function Home() {
     animationFrame = requestAnimationFrame(animateCursor);
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener(
+        "mousemove",
+        handleMouseMove
+      );
+
       cancelAnimationFrame(animationFrame);
     };
   }, []);
 
-  // Save chat
+  // ==================================================
+  // SAVE CHAT
+  // ==================================================
+
   useEffect(() => {
     if (!loaded) return;
 
@@ -120,6 +136,10 @@ export default function Home() {
       console.error("Could not save chat history:", error);
     }
   }, [messages, loaded]);
+
+  // ==================================================
+  // SEND MESSAGE
+  // ==================================================
 
   async function sendMessage(customMessage?: string) {
     const userMessage = (customMessage ?? input).trim();
@@ -148,36 +168,169 @@ export default function Home() {
         }),
       });
 
-      const data = await response.json();
+      // Safely read response
+      let data: {
+        response?: string;
+        error?: string;
+        details?: string;
+      };
 
-      if (!response.ok) {
+      try {
+        data = await response.json();
+      } catch {
         throw new Error(
-          data.error || "Something went wrong"
+          `Server returned status ${response.status}`
         );
       }
+
+      // ==================================================
+      // SERVER ERROR
+      // ==================================================
+
+      if (!response.ok) {
+        const serverError =
+          data.error ||
+          data.details ||
+          `Request failed with status ${response.status}`;
+
+        const error = new Error(serverError);
+
+        // Attach HTTP status for easier detection
+        (
+          error as Error & { status?: number }
+        ).status = response.status;
+
+        throw error;
+      }
+
+      // ==================================================
+      // SUCCESS
+      // ==================================================
 
       setMessages((previous) => [
         ...previous,
         {
           role: "assistant",
-          content: data.response,
+          content:
+            data.response ||
+            "I couldn't generate a response.",
         },
       ]);
     } catch (error) {
+      console.error("Chat request error:", error);
+
       const errorMessage =
-        error instanceof Error ? error.message : "";
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      const status =
+        error &&
+        typeof error === "object" &&
+        "status" in error
+          ? (error as { status?: number }).status
+          : undefined;
+
+      const lowerError = errorMessage.toLowerCase();
 
       let assistantMessage =
-        "Sorry, something went wrong. Please try again.";
+        "⚠️ **Something went wrong**\n\n" +
+        "I couldn't process your request right now. Please try again.";
+
+      // ==================================================
+      // 429 - GEMINI QUOTA / RATE LIMIT
+      // ==================================================
 
       if (
+        status === 429 ||
         errorMessage.includes("429") ||
-        errorMessage.includes("RESOURCE_EXHAUSTED") ||
-        errorMessage.toLowerCase().includes("quota")
+        lowerError.includes("resource_exhausted") ||
+        lowerError.includes("quota") ||
+        lowerError.includes("rate limit") ||
+        lowerError.includes("too many requests")
       ) {
         assistantMessage =
-          "⚠️ Gemini's free quota has been reached. Please try again later.";
+          "⚠️ **Gemini API limit reached**\n\n" +
+          "The Gemini API quota or rate limit has been reached for your API key.\n\n" +
+          "Your chatbot itself is working correctly. Please wait for the quota to reset or use another available Gemini API key/model.";
       }
+
+      // ==================================================
+      // 401 - API KEY
+      // ==================================================
+
+      else if (
+        status === 401 ||
+        errorMessage.includes("401") ||
+        lowerError.includes("api key") ||
+        lowerError.includes("authentication") ||
+        lowerError.includes("unauthorized")
+      ) {
+        assistantMessage =
+          "🔑 **Gemini API authentication error**\n\n" +
+          "The Gemini API key could not be authenticated. Please check your `GEMINI_API_KEY` environment variable in Vercel.";
+      }
+
+      // ==================================================
+      // 403 - PERMISSION
+      // ==================================================
+
+      else if (
+        status === 403 ||
+        errorMessage.includes("403") ||
+        lowerError.includes("permission denied") ||
+        lowerError.includes("forbidden")
+      ) {
+        assistantMessage =
+          "🔒 **Gemini API permission error**\n\n" +
+          "Your API key does not currently have permission to use this Gemini API/model.";
+      }
+
+      // ==================================================
+      // 404 - MODEL NOT FOUND
+      // ==================================================
+
+      else if (
+        status === 404 ||
+        errorMessage.includes("404") ||
+        lowerError.includes("model not found") ||
+        lowerError.includes("not found")
+      ) {
+        assistantMessage =
+          "🤖 **Gemini model unavailable**\n\n" +
+          "The Gemini model configured in your `route.ts` was not found or is not available for this API project.\n\n" +
+          "Check the model name in `app/api/chat/route.ts`.";
+      }
+
+      // ==================================================
+      // 500 - SERVER ERROR
+      // ==================================================
+
+      else if (
+        status === 500 ||
+        errorMessage.includes("500")
+      ) {
+        assistantMessage =
+          "⚠️ **Server error**\n\n" +
+          "The chatbot server encountered an error while processing your request. Please check the Vercel deployment logs.";
+      }
+
+      // ==================================================
+      // NETWORK ERROR
+      // ==================================================
+
+      else if (
+        lowerError.includes("failed to fetch") ||
+        lowerError.includes("network error")
+      ) {
+        assistantMessage =
+          "🌐 **Connection problem**\n\n" +
+          "I couldn't connect to the chatbot server. Please check your internet connection and try again.";
+      }
+
+      // ==================================================
+      // DISPLAY ERROR
+      // ==================================================
 
       setMessages((previous) => [
         ...previous,
@@ -191,19 +344,34 @@ export default function Home() {
     }
   }
 
+  // ==================================================
+  // ENTER KEY
+  // ==================================================
+
   function handleKeyDown(
     event: React.KeyboardEvent<HTMLTextAreaElement>
   ) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey
+    ) {
       event.preventDefault();
       sendMessage();
     }
   }
 
+  // ==================================================
+  // CLEAR CHAT
+  // ==================================================
+
   function clearChat() {
     setMessages([]);
     localStorage.removeItem(STORAGE_KEY);
   }
+
+  // ==================================================
+  // COPY MESSAGE
+  // ==================================================
 
   async function copyMessage(
     content: string,
@@ -222,6 +390,10 @@ export default function Home() {
     }
   }
 
+  // ==================================================
+  // SUGGESTIONS
+  // ==================================================
+
   const suggestions = [
     "Explain artificial intelligence simply",
     "Help me write a professional resume",
@@ -230,7 +402,7 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#070b14] text-white">
+    <main className="min-h-screen bg-[#070b14] text-white">
 
       {/* ================================================== */}
       {/* CUSTOM CURSOR                                      */}
@@ -287,11 +459,13 @@ export default function Home() {
           <div className="flex items-center gap-3">
 
             <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-xl shadow-lg shadow-blue-500/20">
+
               <div className="absolute inset-0 rounded-2xl bg-blue-400/20 blur-md" />
 
               <span className="relative">
                 ✨
               </span>
+
             </div>
 
             <div>
@@ -430,6 +604,7 @@ export default function Home() {
                 >
 
                   {/* AI Avatar */}
+
                   {message.role === "assistant" && (
 
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-sm shadow-lg shadow-blue-500/10">
@@ -574,18 +749,25 @@ export default function Home() {
 
                               pre: ({ children }) => (
                                 <div className="my-4 overflow-hidden rounded-xl border border-white/10 bg-[#050810] shadow-lg">
+
                                   <div className="flex items-center gap-1.5 border-b border-white/10 bg-white/[0.03] px-4 py-2">
+
                                     <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+
                                     <span className="h-2.5 w-2.5 rounded-full bg-yellow-400/70" />
+
                                     <span className="h-2.5 w-2.5 rounded-full bg-green-400/70" />
+
                                     <span className="ml-2 text-[10px] text-slate-500">
                                       CODE
                                     </span>
+
                                   </div>
 
                                   <pre className="overflow-x-auto p-4 text-sm leading-6">
                                     {children}
                                   </pre>
+
                                 </div>
                               ),
 
@@ -643,7 +825,8 @@ export default function Home() {
 
                     </div>
 
-                    {/* AI Actions */}
+                    {/* AI ACTIONS */}
+
                     {message.role === "assistant" && (
 
                       <div className="mt-2 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
@@ -668,7 +851,8 @@ export default function Home() {
 
                   </div>
 
-                  {/* User Avatar */}
+                  {/* USER AVATAR */}
+
                   {message.role === "user" && (
 
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-sm">
@@ -681,7 +865,10 @@ export default function Home() {
 
               ))}
 
-              {/* Loading */}
+              {/* ================================================== */}
+              {/* LOADING                                             */}
+              {/* ================================================== */}
+
               {loading && (
 
                 <div className="flex items-start gap-3">
