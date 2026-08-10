@@ -20,13 +20,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // India Standard Time
-    const timeZone = "Asia/Kolkata";
+    // =====================================================
+    // CURRENT DATE AND TIME - INDIA
+    // =====================================================
 
     const now = new Date();
 
     const dateFormatter = new Intl.DateTimeFormat("en-IN", {
-      timeZone: timeZone,
+      timeZone: "Asia/Kolkata",
       weekday: "long",
       day: "numeric",
       month: "long",
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
     });
 
     const timeFormatter = new Intl.DateTimeFormat("en-IN", {
-      timeZone: timeZone,
+      timeZone: "Asia/Kolkata",
       hour: "numeric",
       minute: "2-digit",
       second: "2-digit",
@@ -44,88 +45,31 @@ export async function POST(request: Request) {
     const currentDate = dateFormatter.format(now);
     const currentTime = timeFormatter.format(now);
 
-    // Normalize the user's question
-    const normalizedMessage = message
-      .toLowerCase()
-      .trim()
-      .replace(/[?!.,]/g, "");
-
     // =====================================================
-    // DATE QUESTIONS
+    // DATE/TIME QUESTIONS
     // =====================================================
 
-    const asksForToday =
-      normalizedMessage.includes("today's date") ||
-      normalizedMessage.includes("todays date") ||
-      normalizedMessage.includes("what is today's date") ||
-      normalizedMessage.includes("what is todays date") ||
-      normalizedMessage.includes("what date is it today") ||
-      normalizedMessage.includes("what day is today") ||
-      normalizedMessage.includes("what day is it today") ||
-      normalizedMessage === "today";
+    const text = message.toLowerCase().trim();
 
-    if (asksForToday) {
+    if (
+      text.includes("today's date") ||
+      text.includes("todays date") ||
+      text.includes("what date is it today") ||
+      text.includes("what day is today") ||
+      text === "today"
+    ) {
       return Response.json({
         response: `Today is **${currentDate}**.`,
       });
     }
 
-    // =====================================================
-    // CURRENT TIME
-    // =====================================================
-
-    const asksForTime =
-      normalizedMessage.includes("current time") ||
-      normalizedMessage.includes("what time is it") ||
-      normalizedMessage.includes("what is the current time") ||
-      normalizedMessage.includes("what time is it now") ||
-      normalizedMessage.includes("time now");
-
-    if (asksForTime) {
+    if (
+      text.includes("current time") ||
+      text.includes("what time is it") ||
+      text.includes("time now")
+    ) {
       return Response.json({
         response: `The current time in India is **${currentTime}**.`,
-      });
-    }
-
-    // =====================================================
-    // TOMORROW
-    // =====================================================
-
-    const asksForTomorrow =
-      normalizedMessage.includes("tomorrow's date") ||
-      normalizedMessage.includes("tomorrows date") ||
-      normalizedMessage.includes("what date is tomorrow") ||
-      normalizedMessage.includes("date tomorrow");
-
-    if (asksForTomorrow) {
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const tomorrowDate = dateFormatter.format(tomorrow);
-
-      return Response.json({
-        response: `Tomorrow is **${tomorrowDate}**.`,
-      });
-    }
-
-    // =====================================================
-    // YESTERDAY
-    // =====================================================
-
-    const asksForYesterday =
-      normalizedMessage.includes("yesterday's date") ||
-      normalizedMessage.includes("yesterdays date") ||
-      normalizedMessage.includes("what date was yesterday") ||
-      normalizedMessage.includes("date yesterday");
-
-    if (asksForYesterday) {
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      const yesterdayDate = dateFormatter.format(yesterday);
-
-      return Response.json({
-        response: `Yesterday was **${yesterdayDate}**.`,
       });
     }
 
@@ -140,27 +84,25 @@ export async function POST(request: Request) {
     const prompt = `
 You are My AI Assistant.
 
-The current date in India is:
+Current date in India:
 ${currentDate}
 
-The current time in India is:
+Current time in India:
 ${currentTime}
 
-Timezone: Asia/Kolkata (IST)
-
-Use the date and time above when answering date-related questions.
-
-User's message:
-${message}
+Timezone: Asia/Kolkata.
 
 Answer the user's question clearly and helpfully.
 
-For longer answers, use Markdown formatting:
-- Use headings when appropriate.
-- Use bullet points for lists.
-- Use numbered lists for steps.
-- Use bold text for important information.
-- Use code blocks for programming code.
+Use Markdown formatting when useful:
+- Headings
+- Bullet points
+- Numbered lists
+- Bold text
+- Code blocks
+
+User question:
+${message}
 `;
 
     const response = await ai.models.generateContent({
@@ -171,6 +113,7 @@ For longer answers, use Markdown formatting:
     return Response.json({
       response: response.text,
     });
+
   } catch (error) {
     console.error("Gemini API error:", error);
 
@@ -179,7 +122,7 @@ For longer answers, use Markdown formatting:
         error:
           error instanceof Error
             ? error.message
-            : "Failed to get response from Gemini",
+            : "Failed to get Gemini response",
       },
       { status: 500 }
     );
